@@ -1,8 +1,8 @@
 [package]
 name = "devterm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "A two-pane terminal UI: shell on the left, file browser on the right."
+description = "A terminal laid out like a code editor: shell + editor tabs on the left, file tree on the right."
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/YOUR_USERNAME/devterm"
@@ -12,6 +12,11 @@ categories = ["command-line-utilities"]
 [dependencies]
 # ratatui pulls in crossterm (re-exported as ratatui::crossterm) with default features.
 ratatui = "0.29"
+portable-pty = "0.8"
+vt100 = "0.15"
+# default-fancy = pure-Rust regex (fancy-regex), no onig C dependency.
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
+unicode-width = "0.2"
 
 [profile.release]
 strip = true

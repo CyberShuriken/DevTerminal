@@ -1,68 +1,82 @@
-//! devterm — a two-pane terminal UI (shell left, file browser right).
-//!
-//! Milestone 1: layout, focus switching, and a working file-browser pane.
-//! Milestone 2 (planned): a real interactive shell in the left pane via a PTY.
+//! devterm — a terminal laid out like a code editor: a real shell plus
+//! editor tabs on the left, a live file tree on the right.
 
 mod app;
-mod fs;
+mod editor;
+mod highlight;
+mod keys;
+mod terminal;
+mod tree;
 mod ui;
 
 use std::io::{self, stdout};
+use std::path::PathBuf;
 use std::time::Duration;
 
-use ratatui::backend::{Backend, CrosstermBackend};
+use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
+    event::{self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::Terminal;
 
-use app::{App, Focus};
+use app::App;
 
 fn main() -> io::Result<()> {
-    let mut terminal = setup_terminal()?;
-    let mut app = App::new()?;
+    let dir = match std::env::args_os().nth(1) {
+        Some(d) => std::fs::canonicalize(PathBuf::from(d))?,
+        None => std::env::current_dir()?,
+    };
+    if !dir.is_dir() {
+        return Err(io::Error::other(format!("{} is not a directory", dir.display())));
+    }
 
-    let result = run(&mut terminal, &mut app);
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        restore();
+        hook(info);
+    }));
 
-    restore_terminal(&mut terminal)?;
+    enable_raw_mode()?;
+    execute!(stdout(), EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
+    let result = App::new(dir).and_then(|mut app| {
+        let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+        run(&mut terminal, &mut app)
+    });
+    restore();
     result
 }
 
-fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<io::Stdout>>> {
-    enable_raw_mode()?;
-    let mut out = stdout();
-    execute!(out, EnterAlternateScreen)?;
-    Terminal::new(CrosstermBackend::new(out))
+fn restore() {
+    let _ = disable_raw_mode();
+    let _ = execute!(
+        stdout(),
+        DisableBracketedPaste,
+        DisableMouseCapture,
+        LeaveAlternateScreen,
+        ratatui::crossterm::cursor::Show
+    );
 }
 
-fn restore_terminal<B: Backend + io::Write>(terminal: &mut Terminal<B>) -> io::Result<()> {
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-    Ok(())
-}
-
-fn run<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<()> {
-    loop {
-        terminal.draw(|f| ui::draw(f, app))?;
-
-        // Poll so the UI stays responsive; 250ms is plenty for a file browser.
-        if !event::poll(Duration::from_millis(250))? {
-            continue;
+fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> io::Result<()> {
+    let mut dirty = true;
+    while !app.quit {
+        if dirty {
+            terminal.draw(|f| ui::draw(f, app))?;
+            dirty = false;
         }
-
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Press {
-                continue;
+        if event::poll(Duration::from_millis(16))? {
+            // Drain everything pending before the next redraw.
+            loop {
+                app.handle(event::read()?);
+                if app.quit || !event::poll(Duration::ZERO)? {
+                    break;
+                }
             }
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Tab => app.toggle_focus(),
-                code if app.focus == Focus::Files => app.handle_files_key(code),
-                _ => {}
-            }
+            dirty = true;
         }
+        dirty |= app.tick();
     }
+    Ok(())
 }

@@ -1,63 +1,89 @@
 # devterm
 
-A small, fast **two-pane terminal UI** written in Rust: a shell on the left, a
-file browser on the right — the layout of a code editor, in a single terminal.
+A small, fast **terminal laid out like a code editor**, written in Rust: a real
+shell and editor tabs on the left, a live file tree on the right, a status bar
+at the bottom — all inside one terminal window.
 
-Built with [ratatui](https://ratatui.rs) + crossterm. Compiles to one static
-binary, no runtime.
+Built with [ratatui](https://ratatui.rs) + crossterm,
+[portable-pty](https://crates.io/crates/portable-pty) +
+[vt100](https://crates.io/crates/vt100) for the shell, and
+[syntect](https://crates.io/crates/syntect) (pure-Rust regex, no C deps) for
+syntax highlighting.
 
-> **Status: Milestone 1.** The layout, pane focus, and file browser work. The
-> left pane is currently a placeholder — Milestone 2 turns it into a real
-> interactive shell (see [Roadmap](#roadmap)).
+> **Status: v0.2.** Linux only for now (live cwd sync reads `/proc`).
 
-## Features (Milestone 1)
+## Features
 
-- Two-column layout — file browser pane and (placeholder) shell pane.
-- Working file browser: navigate directories, see dirs-first sorted listings.
-- Focus switching between panes; the focused pane is highlighted.
-- Starts in your current working directory.
+- **Real terminal tab** — tab 1 runs your `$SHELL` (fallback `/bin/bash`) in a
+  PTY. `vim`, `htop`, `git`, `cd` all work. 5000 lines of scrollback (mouse
+  wheel). It can't be closed; if the shell exits, press Enter to restart it.
+- **Editor tabs** — click a file in the tree to open it as a tab. Syntax
+  highlighting (`base16-ocean.dark`), line-number gutter, auto-indent, smart
+  Home, `Ctrl+S` to save, `●` marks unsaved changes, `×` closes the tab.
+  Line endings (LF/CRLF) and the trailing newline are preserved. Binary,
+  non-UTF-8 and >8MB files are refused with a status message.
+- **File tree** — `..`, then folders, then files (case-insensitive). Unreadable
+  folders are ignored; going up keeps the folder you came from selected.
+- **Live sync** — `cd` in the shell and the tree follows (polls
+  `/proc/<shell pid>/cwd` every ~400ms).
+- **Mouse** — click tree entries, tabs, `×`, or inside the editor to place the
+  cursor; wheel-scroll the tree, editor and terminal scrollback.
+
+> **Selecting text:** devterm captures the mouse, so hold **Shift** while
+> dragging to select/copy text with your terminal emulator.
 
 ## Build & run
 
-Requires a Rust toolchain ([rustup](https://rustup.rs)).
-
 ```bash
-git clone https://github.com/YOUR_USERNAME/devterm
-cd devterm
-cargo run            # debug
-cargo build --release && ./target/release/devterm   # optimized
+cargo build --release
+./target/release/devterm            # start in the current directory
+./target/release/devterm ~/project  # or in a given directory
 ```
 
 ## Keys
 
+Global keys use `Alt` so they don't steal keys your shell needs.
+
 | Key | Action |
 | --- | --- |
-| `Tab` | switch focused pane |
-| `q` | quit |
-| `j` / `k` (or ↓ / ↑) | move selection in the file pane |
-| `Enter` / `l` / → | open the selected directory |
-| `Backspace` / `h` / ← | go up one directory |
+| `Ctrl+Q` | quit (press twice if any file is unsaved) |
+| `Alt+E` | toggle focus: left pane ⇄ file tree |
+| `Alt+←` / `Alt+→` | previous / next tab |
+| `Alt+1` … `Alt+9` | jump to tab |
+| `Alt+W` | close file tab (press twice if unsaved) |
+| `Ctrl+S` | save (editor tabs; in the terminal tab it goes to the shell) |
+
+**File tree:** `j`/`k` or ↑/↓ move, `Enter`/`l`/→ open, `h`/←/`Backspace` go up.
+Opening a file focuses its tab.
+
+**Terminal tab:** every other key goes to the shell; typing snaps scrollback
+back to the bottom.
+
+**Editor:** arrows (with remembered column), `Home` (smart) / `End`,
+`PgUp`/`PgDn`, `Ctrl+Home`/`Ctrl+End`, `Tab` (tab or spaces, matching the
+file), `Enter` (auto-indent), `Backspace`/`Delete` (join lines), paste.
 
 ## Project layout
 
 ```
 src/
-  main.rs   terminal setup/teardown + event loop
-  app.rs    application state, focus, input handling
-  ui.rs     rendering (the two-column layout)
-  fs.rs     directory reading + sorting
+  main.rs       terminal setup/teardown, panic hook, event loop
+  app.rs        state, focus, tabs, keybindings, mouse routing
+  ui.rs         layout: tab bar + content | file tree, status bar
+  terminal.rs   $SHELL in a PTY, vt100 screen → ratatui buffer
+  keys.rs       key events → xterm byte sequences
+  editor.rs     text buffer, editing, rendering
+  highlight.rs  incremental syntect highlighting cache
+  tree.rs       directory listing for the file tree
 ```
 
 ## Roadmap
 
-- **Milestone 2 — real shell pane.** Run an interactive shell in the left pane
-  through a PTY, using [`portable-pty`](https://crates.io/crates/portable-pty) +
-  [`vt100`](https://crates.io/crates/vt100) +
-  [`tui-term`](https://crates.io/crates/tui-term) so programs like `vim` and
-  `htop` work.
-- **Live directory sync.** When you `cd` in the shell, update the file pane to
-  match.
-- Open files in `$EDITOR`, previews, resizable split, config file.
+- Forward mouse events to full-screen terminal apps that request them
+  (vim/htop mouse mode).
+- Undo/redo, search, selection and clipboard in the editor.
+- Tree: expandable folders, create/rename/delete files.
+- Resizable split, config file, macOS support for cwd sync.
 
 ## License
 
