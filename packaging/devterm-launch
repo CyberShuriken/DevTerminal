@@ -1,0 +1,30 @@
+#!/bin/sh
+# Open devterm in its own terminal window, tagged with the app id "devterm"
+# so the desktop treats it as a separate app (own icon, can be pinned).
+# Usage: devterm-launch [directory]
+DEVTERM="${DEVTERM_BIN:-devterm}"
+command -v "$DEVTERM" >/dev/null 2>&1 || DEVTERM="$HOME/.cargo/bin/devterm"
+
+if command -v kitty >/dev/null 2>&1; then
+    exec kitty --class devterm --title devterm \
+        -o remember_window_size=no -o initial_window_width=150c -o initial_window_height=42c \
+        "$DEVTERM" "$@"
+elif command -v foot >/dev/null 2>&1; then
+    exec foot --app-id devterm --title devterm --window-size-chars 150x42 "$DEVTERM" "$@"
+elif command -v alacritty >/dev/null 2>&1; then
+    exec alacritty --class devterm --title devterm -e "$DEVTERM" "$@"
+elif command -v wezterm >/dev/null 2>&1; then
+    exec wezterm start --class devterm -- "$DEVTERM" "$@"
+else
+    # shortcut: these terminals can't set their own app id, so the window groups
+    # under that terminal's icon instead of devterm's. Install kitty or foot to fix.
+    for t in gnome-terminal konsole xterm; do
+        command -v "$t" >/dev/null 2>&1 || continue
+        case "$t" in
+            gnome-terminal) exec gnome-terminal --title devterm -- "$DEVTERM" "$@" ;;
+            *) exec "$t" -e "$DEVTERM" "$@" ;;
+        esac
+    done
+    echo "devterm-launch: no terminal emulator found (install kitty or foot)" >&2
+    exit 1
+fi

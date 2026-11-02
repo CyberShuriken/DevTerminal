@@ -50,6 +50,27 @@ cargo build --release
 ./target/release/devterm
 ```
 
+### Desktop app (pin it to your dock)
+
+Install devterm as a regular app with its own icon — it opens in its own window,
+shows up in your app menu, and can be pinned to the GNOME dash / KDE panel:
+
+```bash
+sh packaging/install.sh              # install or update
+sh packaging/install.sh --uninstall  # remove
+```
+
+This installs for your user only (no root): the binary via `cargo install`, a
+`devterm` menu entry and icon. The window runs inside
+[kitty](https://sw.kovidgoyal.net/kitty/) or [foot](https://codeberg.org/dnkl/foot)
+(whichever is installed), tagged as its own app so it gets devterm's icon
+in the dock. Then open your app menu, search **devterm**, right-click →
+**Pin to Dash**. Run `devterm-launch ~/some/dir` to open a window in a folder.
+
+> [!NOTE]
+> Closing the window with its **×** ends devterm immediately, without the
+> unsaved-changes warning. Quit with `Ctrl+Q` to be warned.
+
 ## Usage
 
 ```bash
