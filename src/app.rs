@@ -31,10 +31,14 @@ pub struct Rects {
     pub tree: Rect,
 }
 
+pub enum Tab {
+    Term(Terminal),
+    Editor(Editor),
+}
+
 pub struct App {
-    pub term: Terminal,
-    pub editors: Vec<Editor>,
-    /// 0 = terminal, n = editors[n - 1].
+    /// tabs[0] is always the main terminal and can't be closed.
+    pub tabs: Vec<Tab>,
     pub active: usize,
     pub focus: Focus,
     pub tree: Tree,
@@ -56,8 +60,7 @@ impl App {
         let tree = Tree::new(dir.clone())?;
         let term = Terminal::spawn(&dir, 24, 80)?;
         Ok(Self {
-            term,
-            editors: Vec::new(),
+            tabs: vec![Tab::Term(term)],
             active: 0,
             focus: Focus::Left,
             tree,
@@ -72,15 +75,32 @@ impl App {
     }
 
     pub fn editor(&mut self) -> Option<&mut Editor> {
-        self.active.checked_sub(1).and_then(|i| self.editors.get_mut(i))
+        match &mut self.tabs[self.active] {
+            Tab::Editor(e) => Some(e),
+            Tab::Term(_) => None,
+        }
+    }
+
+    fn editors(&self) -> impl Iterator<Item = &Editor> {
+        self.tabs.iter().filter_map(|t| match t {
+            Tab::Editor(e) => Some(e),
+            Tab::Term(_) => None,
+        })
     }
 
     /// Periodic work. Returns true if a redraw is needed.
     pub fn tick(&mut self) -> bool {
-        let mut changed = self.term.take_dirty();
+        let mut changed = false;
+        for t in &mut self.tabs {
+            if let Tab::Term(t) = t {
+                changed |= t.take_dirty();
+            }
+        }
+        // The tree follows the active terminal tab; editor tabs leave it alone.
         if self.last_poll.elapsed() >= CWD_POLL {
             self.last_poll = Instant::now();
-            let cwd = self.term.cwd();
+            let Tab::Term(term) = &self.tabs[self.active] else { return changed };
+            let cwd = term.cwd();
             if cwd.is_some() && cwd != self.shell_cwd {
                 self.shell_cwd = cwd.clone();
                 changed |= cwd.is_some_and(|d| self.tree.set_dir(d));
@@ -93,9 +113,9 @@ impl App {
         match ev {
             Event::Key(k) if k.kind != KeyEventKind::Release => self.key(k),
             Event::Mouse(m) => self.mouse(m),
-            Event::Paste(s) if self.focus == Focus::Left => match self.editor() {
-                Some(e) => e.paste(&s),
-                None => self.term.paste(&s),
+            Event::Paste(s) if self.focus == Focus::Left => match &mut self.tabs[self.active] {
+                Tab::Editor(e) => e.paste(&s),
+                Tab::Term(t) => t.paste(&s),
             },
             _ => {}
         }
@@ -111,7 +131,7 @@ impl App {
 
         match k.code {
             KeyCode::Char('q') if ctrl => {
-                if quit_armed || !self.editors.iter().any(|e| e.dirty) {
+                if quit_armed || !self.editors().any(|e| e.dirty) {
                     self.quit = true;
                 } else {
                     self.quit_armed = true;
@@ -121,27 +141,28 @@ impl App {
             KeyCode::Char('e') if alt => {
                 self.focus = if self.focus == Focus::Left { Focus::Tree } else { Focus::Left };
             }
-            KeyCode::Left if alt => self.switch(self.active.checked_sub(1).unwrap_or(self.editors.len())),
-            KeyCode::Right if alt => self.switch((self.active + 1) % (self.editors.len() + 1)),
+            KeyCode::Left if alt => self.switch((self.active + self.tabs.len() - 1) % self.tabs.len()),
+            KeyCode::Right if alt => self.switch((self.active + 1) % self.tabs.len()),
             KeyCode::Char(c @ '1'..='9') if alt => self.switch(c as usize - '1' as usize),
             KeyCode::Char('w') if alt => self.close(self.active, close_armed),
+            KeyCode::Char('t') if alt => self.new_terminal(),
             _ if self.focus == Focus::Tree => self.tree_key(k),
-            KeyCode::Char('s') if ctrl && self.active > 0 => self.save(),
-            _ if self.active > 0 => {
-                if let Some(e) = self.editor() {
+            KeyCode::Char('s') if ctrl && self.editor().is_some() => self.save(),
+            _ => match &mut self.tabs[self.active] {
+                Tab::Editor(e) => {
                     e.handle_key(k);
                 }
-            }
-            _ if self.term.exited => {
-                if k.code == KeyCode::Enter {
-                    self.restart_shell();
+                Tab::Term(t) if t.exited => {
+                    if k.code == KeyCode::Enter {
+                        self.restart_shell();
+                    }
                 }
-            }
-            _ => {
-                self.term.scroll_to_bottom();
-                let bytes = keys::to_bytes(k, self.term.application_cursor());
-                self.term.write(&bytes);
-            }
+                Tab::Term(t) => {
+                    t.scroll_to_bottom();
+                    let bytes = keys::to_bytes(k, t.application_cursor());
+                    t.write(&bytes);
+                }
+            },
         }
     }
 
@@ -158,7 +179,7 @@ impl App {
     }
 
     fn switch(&mut self, idx: usize) {
-        if idx <= self.editors.len() {
+        if idx < self.tabs.len() {
             self.active = idx;
             self.focus = Focus::Left;
         }
@@ -172,16 +193,19 @@ impl App {
     }
 
     fn close(&mut self, idx: usize, armed: bool) {
-        let Some(e) = idx.checked_sub(1).and_then(|i| self.editors.get(i)) else {
-            self.status = "The terminal tab can't be closed.".into();
-            return;
-        };
-        if e.dirty && !armed {
-            self.close_armed = true;
-            self.status = format!("{} has unsaved changes! Press Alt+W again to discard.", e.file_name());
+        if idx == 0 {
+            self.status = "The main terminal tab can't be closed.".into();
             return;
         }
-        self.editors.remove(idx - 1);
+        if let Some(Tab::Editor(e)) = self.tabs.get(idx) {
+            if e.dirty && !armed {
+                self.close_armed = true;
+                self.status = format!("{} has unsaved changes! Press Alt+W again to discard.", e.file_name());
+                return;
+            }
+        }
+        // Dropping a Terminal kills its shell.
+        self.tabs.remove(idx);
         if self.active >= idx {
             self.active -= 1;
         }
@@ -200,28 +224,40 @@ impl App {
     }
 
     fn open_file(&mut self, path: PathBuf) {
-        if let Some(i) = self.editors.iter().position(|e| e.path == path) {
-            self.switch(i + 1);
+        if let Some(i) = self.tabs.iter().position(|t| matches!(t, Tab::Editor(e) if e.path == path)) {
+            self.switch(i);
             return;
         }
         match Editor::open(&path) {
             Ok(e) => {
                 self.status = format!("opened {} ({})", e.file_name(), e.language());
-                self.editors.push(e);
-                self.switch(self.editors.len());
+                self.tabs.push(Tab::Editor(e));
+                self.switch(self.tabs.len() - 1);
             }
             Err(msg) => self.status = msg,
         }
     }
 
-    fn restart_shell(&mut self) {
+    fn spawn_shell(&mut self) -> Option<Terminal> {
         let (r, c) = (self.rects.content.height.max(2), self.rects.content.width.max(2));
-        match Terminal::spawn(&self.tree.cwd, r, c) {
-            Ok(t) => {
-                self.term = t;
-                self.shell_cwd = Some(self.tree.cwd.clone());
-            }
-            Err(e) => self.status = format!("cannot start shell: {e}"),
+        Terminal::spawn(&self.tree.cwd, r, c)
+            .map_err(|e| self.status = format!("cannot start shell: {e}"))
+            .ok()
+    }
+
+    fn restart_shell(&mut self) {
+        if let Some(t) = self.spawn_shell() {
+            self.tabs[self.active] = Tab::Term(t);
+            self.shell_cwd = Some(self.tree.cwd.clone());
+        }
+    }
+
+    /// Alt+T: a new shell tab in the tree's current folder.
+    fn new_terminal(&mut self) {
+        if let Some(t) = self.spawn_shell() {
+            self.tabs.push(Tab::Term(t));
+            self.shell_cwd = Some(self.tree.cwd.clone());
+            self.switch(self.tabs.len() - 1);
         }
     }
 
@@ -238,9 +274,9 @@ impl App {
             if contains(r.tree, x, y) {
                 self.tree.move_by(scroll);
             } else if contains(r.content, x, y) {
-                match self.editor() {
-                    Some(e) => e.scroll(scroll),
-                    None => self.term.scroll(-scroll),
+                match &mut self.tabs[self.active] {
+                    Tab::Editor(e) => e.scroll(scroll),
+                    Tab::Term(t) => t.scroll(-scroll),
                 }
             }
             return;

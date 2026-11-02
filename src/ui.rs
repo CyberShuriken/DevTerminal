@@ -3,7 +3,7 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
-use crate::app::{App, Focus};
+use crate::app::{App, Focus, Tab};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let rows = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(f.area());
@@ -22,15 +22,12 @@ fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
     app.rects.tabs.clear();
     let mut x = area.x;
     let end = area.right();
-    for idx in 0..=app.editors.len() {
-        let (label, closable) = match idx {
-            0 => (" 1 terminal ".to_string(), false),
-            _ => {
-                let e = &app.editors[idx - 1];
-                let dot = if e.dirty { " ●" } else { "" };
-                (format!(" {} {}{} ", idx + 1, e.file_name(), dot), true)
-            }
+    for (idx, tab) in app.tabs.iter().enumerate() {
+        let label = match tab {
+            Tab::Term(_) => format!(" {} terminal ", idx + 1),
+            Tab::Editor(e) => format!(" {} {}{} ", idx + 1, e.file_name(), if e.dirty { " ●" } else { "" }),
         };
+        let closable = idx > 0;
         let style = if idx == app.active {
             Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)
         } else {
@@ -65,9 +62,9 @@ fn draw_content(f: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
     app.rects.content = inner;
-    let cursor = match app.active {
-        0 => app.term.render(inner, f.buffer_mut()),
-        n => app.editors[n - 1].render(inner, f.buffer_mut()),
+    let cursor = match &mut app.tabs[app.active] {
+        Tab::Term(t) => t.render(inner, f.buffer_mut()),
+        Tab::Editor(e) => e.render(inner, f.buffer_mut()),
     };
     if let (Some((x, y)), Focus::Left) = (cursor, app.focus) {
         f.set_cursor_position((x, y));
@@ -103,9 +100,9 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let (text, style) = if !app.status.is_empty() {
         (app.status.clone(), Style::default().fg(Color::Black).bg(Color::Yellow))
     } else {
-        let hint = match (app.focus, app.active) {
+        let hint = match (app.focus, &app.tabs[app.active]) {
             (Focus::Tree, _) => "j/k move · Enter open · h up · Alt+E back to editor",
-            (Focus::Left, 0) => "Alt+E tree · Alt+←/→ tabs · Alt+1..9 jump · Ctrl+Q quit",
+            (_, Tab::Term(_)) => "Alt+T new terminal · Alt+W close · Alt+E tree · Alt+←/→ tabs · Ctrl+Q quit",
             _ => "Ctrl+S save · Alt+W close · Alt+E tree · Alt+←/→ tabs · Ctrl+Q quit",
         };
         (hint.to_string(), Style::default().fg(Color::Gray).bg(Color::Black))

@@ -1,6 +1,6 @@
 [package]
 name = "devterm"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A terminal laid out like a code editor: shell + editor tabs on the left, file tree on the right."
 license = "MIT"
