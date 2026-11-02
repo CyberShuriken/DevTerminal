@@ -316,7 +316,13 @@ impl App {
             } else if contains(r.content, x, y) {
                 match &mut self.tabs[self.active] {
                     Tab::Editor(e) => e.scroll(scroll),
-                    Tab::Term(t) => t.scroll(-scroll),
+                    // Let a full-screen program (its own pager) scroll first;
+                    // otherwise scroll devterm's scrollback.
+                    Tab::Term(t) => {
+                        if !t.mouse_wheel(scroll < 0, x - r.content.x, y - r.content.y) {
+                            t.scroll(-scroll);
+                        }
+                    }
                 }
             }
             return;

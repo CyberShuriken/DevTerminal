@@ -140,6 +140,50 @@ impl Terminal {
         }
     }
 
+    /// Forward a wheel tick to the program when it owns scrolling: a
+    /// mouse-tracking app gets a mouse report, a plain alt-screen app (less,
+    /// vim, man) gets arrow keys. Returns false when devterm should scroll its
+    /// own scrollback instead. col/row are 0-based within the terminal area.
+    pub fn mouse_wheel(&mut self, up: bool, col: u16, row: u16) -> bool {
+        let (mode, enc, alt) = match self.parser.lock() {
+            Ok(p) => {
+                let s = p.screen();
+                (
+                    s.mouse_protocol_mode(),
+                    s.mouse_protocol_encoding(),
+                    s.alternate_screen(),
+                )
+            }
+            Err(_) => return false,
+        };
+        if mode != vt100::MouseProtocolMode::None {
+            let btn = if up { 64 } else { 65 };
+            let (cx, cy) = (col + 1, row + 1); // mouse coords are 1-based
+            let report = if enc == vt100::MouseProtocolEncoding::Sgr {
+                format!("\x1b[<{btn};{cx};{cy}M").into_bytes()
+            } else {
+                let b = |v: u16| (v + 32).min(255) as u8;
+                vec![0x1b, b'[', b'M', b(btn), b(cx), b(cy)]
+            };
+            self.write(&report);
+            true
+        } else if alt {
+            let ss3 = self.application_cursor();
+            let arrow: &[u8] = match (up, ss3) {
+                (true, false) => b"\x1b[A",
+                (true, true) => b"\x1bOA",
+                (false, false) => b"\x1b[B",
+                (false, true) => b"\x1bOB",
+            };
+            for _ in 0..3 {
+                self.write(arrow);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn scroll_to_bottom(&mut self) {
         if let Ok(mut p) = self.parser.lock() {
             if p.screen().scrollback() != 0 {
