@@ -24,13 +24,26 @@ fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
         .map(|e| {
             let path = e.path();
             // metadata() follows symlinks, so a link to a folder counts as a folder.
-            let is_dir = std::fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false);
-            Entry { name: e.file_name().to_string_lossy().into(), path, is_dir }
+            let is_dir = std::fs::metadata(&path)
+                .map(|m| m.is_dir())
+                .unwrap_or(false);
+            Entry {
+                name: e.file_name().to_string_lossy().into(),
+                path,
+                is_dir,
+            }
         })
         .collect();
     v.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
     if let Some(parent) = dir.parent() {
-        v.insert(0, Entry { name: "..".into(), path: parent.to_path_buf(), is_dir: true });
+        v.insert(
+            0,
+            Entry {
+                name: "..".into(),
+                path: parent.to_path_buf(),
+                is_dir: true,
+            },
+        );
     }
     Ok(v)
 }
@@ -38,19 +51,29 @@ fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
 impl Tree {
     pub fn new(dir: PathBuf) -> std::io::Result<Self> {
         let entries = read(&dir)?;
-        Ok(Self { cwd: dir, entries, state: ListState::default().with_selected(Some(0)) })
+        Ok(Self {
+            cwd: dir,
+            entries,
+            state: ListState::default().with_selected(Some(0)),
+        })
     }
 
     /// Show `dir`. Returns false (and changes nothing) if it can't be read.
     pub fn set_dir(&mut self, dir: PathBuf) -> bool {
-        let Ok(entries) = read(&dir) else { return false };
+        let Ok(entries) = read(&dir) else {
+            return false;
+        };
         // Coming up out of a child folder: keep that folder selected.
         let sel = self
             .cwd
             .strip_prefix(&dir)
             .ok()
             .and_then(|rel| rel.components().next())
-            .and_then(|c| entries.iter().position(|e| e.name == c.as_os_str().to_string_lossy() && e.name != ".."))
+            .and_then(|c| {
+                entries
+                    .iter()
+                    .position(|e| e.name == c.as_os_str().to_string_lossy() && e.name != "..")
+            })
             .unwrap_or(0);
         self.entries = entries;
         self.cwd = dir;
@@ -62,7 +85,8 @@ impl Tree {
         let sel = self.state.selected();
         if let Ok(entries) = read(&self.cwd) {
             self.entries = entries;
-            self.state.select(sel.map(|s| s.min(self.entries.len().saturating_sub(1))));
+            self.state
+                .select(sel.map(|s| s.min(self.entries.len().saturating_sub(1))));
         }
     }
 
@@ -77,7 +101,8 @@ impl Tree {
             return;
         }
         let i = self.state.selected().unwrap_or(0) as isize + delta;
-        self.state.select(Some(i.clamp(0, self.entries.len() as isize - 1) as usize));
+        self.state
+            .select(Some(i.clamp(0, self.entries.len() as isize - 1) as usize));
     }
 
     pub fn selected(&self) -> Option<&Entry> {

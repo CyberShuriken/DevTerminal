@@ -7,7 +7,8 @@ use crate::app::{App, Focus, Tab};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let rows = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).split(f.area());
-    let cols = Layout::horizontal([Constraint::Percentage(68), Constraint::Percentage(32)]).split(rows[0]);
+    let cols =
+        Layout::horizontal([Constraint::Percentage(68), Constraint::Percentage(32)]).split(rows[0]);
     let left = Layout::vertical([Constraint::Length(1), Constraint::Min(2)]).split(cols[0]);
 
     draw_tabs(f, app, left[0]);
@@ -25,11 +26,19 @@ fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
     for (idx, tab) in app.tabs.iter().enumerate() {
         let label = match tab {
             Tab::Term(_) => format!(" {} terminal ", idx + 1),
-            Tab::Editor(e) => format!(" {} {}{} ", idx + 1, e.file_name(), if e.dirty { " ●" } else { "" }),
+            Tab::Editor(e) => format!(
+                " {} {}{} ",
+                idx + 1,
+                e.file_name(),
+                if e.dirty { " ●" } else { "" }
+            ),
         };
         let closable = idx > 0;
         let style = if idx == app.active {
-            Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::Gray).bg(Color::DarkGray)
         };
@@ -83,36 +92,50 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
         .iter()
         .map(|e| {
             if e.is_dir {
-                let s = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+                let s = Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD);
                 ListItem::new(Line::styled(format!("▸ {}", e.name), s))
             } else {
                 ListItem::new(format!("  {}", e.name))
             }
         })
         .collect();
-    let list = List::new(items)
-        .block(block)
-        .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
+    let list = List::new(items).block(block).highlight_style(
+        Style::default()
+            .bg(Color::DarkGray)
+            .add_modifier(Modifier::BOLD),
+    );
     f.render_stateful_widget(list, area, &mut app.tree.state);
 }
 
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let (text, style) = if !app.status.is_empty() {
-        (app.status.clone(), Style::default().fg(Color::Black).bg(Color::Yellow))
+        (
+            app.status.clone(),
+            Style::default().fg(Color::Black).bg(Color::Yellow),
+        )
     } else {
         let hint = match (app.focus, &app.tabs[app.active]) {
             (Focus::Tree, _) => "j/k move · Enter open · h up · Alt+E back to editor",
-            (_, Tab::Term(_)) => "Alt+T new terminal · Alt+W close · Alt+E tree · Alt+←/→ tabs · Ctrl+Q quit",
+            (_, Tab::Term(_)) => {
+                "Alt+T new terminal · Alt+W close · Alt+E tree · Alt+←/→ tabs · Ctrl+Q quit"
+            }
             _ => "Ctrl+S save · Alt+W close · Alt+E tree · Alt+←/→ tabs · Ctrl+Q quit",
         };
-        (hint.to_string(), Style::default().fg(Color::Gray).bg(Color::Black))
+        (
+            hint.to_string(),
+            Style::default().fg(Color::Gray).bg(Color::Black),
+        )
     };
     f.render_widget(Paragraph::new(text).style(style), area);
 }
 
 fn border_style(focused: bool) -> Style {
     if focused {
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     }

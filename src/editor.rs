@@ -32,7 +32,11 @@ pub struct Editor {
 }
 
 fn char_w(c: char, at: usize) -> usize {
-    if c == '\t' { TAB - at % TAB } else { c.width().unwrap_or(0) }
+    if c == '\t' {
+        TAB - at % TAB
+    } else {
+        c.width().unwrap_or(0)
+    }
 }
 
 /// Display width of the first `col` chars of `s` (tabs expanded).
@@ -68,7 +72,8 @@ impl Editor {
         if bytes.contains(&0) {
             return Err(format!("{name}: binary file, not opened"));
         }
-        let text = String::from_utf8(bytes).map_err(|_| format!("{name}: not valid UTF-8, not opened"))?;
+        let text =
+            String::from_utf8(bytes).map_err(|_| format!("{name}: not valid UTF-8, not opened"))?;
         Ok(Self::from_text(path, &text))
     }
 
@@ -78,7 +83,14 @@ impl Editor {
         let body = text.strip_suffix('\n').unwrap_or(text);
         let mut lines: Vec<String> = body
             .split('\n')
-            .map(|l| if crlf { l.strip_suffix('\r').unwrap_or(l) } else { l }.to_string())
+            .map(|l| {
+                if crlf {
+                    l.strip_suffix('\r').unwrap_or(l)
+                } else {
+                    l
+                }
+                .to_string()
+            })
             .collect();
         if lines.is_empty() {
             lines.push(String::new());
@@ -118,7 +130,10 @@ impl Editor {
     }
 
     pub fn file_name(&self) -> String {
-        self.path.file_name().map_or_else(|| self.path.display().to_string(), |n| n.to_string_lossy().into())
+        self.path.file_name().map_or_else(
+            || self.path.display().to_string(),
+            |n| n.to_string_lossy().into(),
+        )
     }
 
     pub fn language(&self) -> &str {
@@ -157,7 +172,9 @@ impl Editor {
         let line = &mut self.lines[self.row];
         let rest = line.split_off(byte_idx(line, self.col));
         let indent: String = if auto_indent {
-            line.chars().take_while(|c| *c == ' ' || *c == '\t').collect()
+            line.chars()
+                .take_while(|c| *c == ' ' || *c == '\t')
+                .collect()
         } else {
             String::new()
         };
@@ -217,7 +234,9 @@ impl Editor {
     }
 
     fn vertical(&mut self, delta: isize) {
-        let goal = *self.goal.get_or_insert_with(|| disp_col(&self.lines[self.row], self.col));
+        let goal = *self
+            .goal
+            .get_or_insert_with(|| disp_col(&self.lines[self.row], self.col));
         let max = self.lines.len() as isize - 1;
         self.row = (self.row as isize + delta).clamp(0, max) as usize;
         self.col = col_at(&self.lines[self.row], goal);
@@ -266,7 +285,10 @@ impl Editor {
                 e.col = e.line_len();
             }),
             KeyCode::Home => self.horizontal(|e| {
-                let first = e.lines[e.row].chars().take_while(|c| c.is_whitespace()).count();
+                let first = e.lines[e.row]
+                    .chars()
+                    .take_while(|c| c.is_whitespace())
+                    .count();
                 e.col = if e.col == first { 0 } else { first };
             }),
             KeyCode::End => self.horizontal(|e| e.col = e.line_len()),
@@ -325,11 +347,18 @@ impl Editor {
             }
             let sy = area.y + y as u16;
             let num_style = if i == self.row {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::DarkGray)
             };
-            buf.set_string(area.x, sy, format!("{:>width$} ", i + 1, width = gw as usize - 1), num_style);
+            buf.set_string(
+                area.x,
+                sy,
+                format!("{:>width$} ", i + 1, width = gw as usize - 1),
+                num_style,
+            );
 
             let fallback = vec![(Style::default(), self.lines[i].clone())];
             let segs = self.hl.line(i).unwrap_or(&fallback);

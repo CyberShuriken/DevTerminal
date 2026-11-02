@@ -7,10 +7,7 @@ pub fn to_bytes(key: KeyEvent, app_cursor: bool) -> Vec<u8> {
     let alt = m.contains(KeyModifiers::ALT);
     let ctrl = m.contains(KeyModifiers::CONTROL);
     // xterm modifier parameter: 1 + shift(1) + alt(2) + ctrl(4)
-    let modp = 1
-        + m.contains(KeyModifiers::SHIFT) as u8
-        + 2 * alt as u8
-        + 4 * ctrl as u8;
+    let modp = 1 + m.contains(KeyModifiers::SHIFT) as u8 + 2 * alt as u8 + 4 * ctrl as u8;
 
     // CSI-style key with final letter: arrows, Home, End, F1-F4.
     let letter = |ch: char, ss3: bool| -> Vec<u8> {
@@ -55,7 +52,13 @@ pub fn to_bytes(key: KeyEvent, app_cursor: bool) -> Vec<u8> {
             return v;
         }
         KeyCode::Enter => b"\r".to_vec(),
-        KeyCode::Backspace => if ctrl { vec![0x08] } else { vec![0x7f] },
+        KeyCode::Backspace => {
+            if ctrl {
+                vec![0x08]
+            } else {
+                vec![0x7f]
+            }
+        }
         KeyCode::Tab => b"\t".to_vec(),
         KeyCode::BackTab => b"\x1b[Z".to_vec(),
         KeyCode::Esc => b"\x1b".to_vec(),
@@ -87,13 +90,37 @@ mod tests {
     }
     #[test]
     fn encodes() {
-        assert_eq!(to_bytes(k(KeyCode::Char('c'), KeyModifiers::CONTROL), false), [3]);
-        assert_eq!(to_bytes(k(KeyCode::Char('x'), KeyModifiers::ALT), false), b"\x1bx");
-        assert_eq!(to_bytes(k(KeyCode::Up, KeyModifiers::NONE), false), b"\x1b[A");
-        assert_eq!(to_bytes(k(KeyCode::Up, KeyModifiers::NONE), true), b"\x1bOA");
-        assert_eq!(to_bytes(k(KeyCode::Right, KeyModifiers::CONTROL), true), b"\x1b[1;5C");
-        assert_eq!(to_bytes(k(KeyCode::F(5), KeyModifiers::NONE), false), b"\x1b[15~");
-        assert_eq!(to_bytes(k(KeyCode::F(1), KeyModifiers::NONE), false), b"\x1bOP");
-        assert_eq!(to_bytes(k(KeyCode::Backspace, KeyModifiers::NONE), false), [0x7f]);
+        assert_eq!(
+            to_bytes(k(KeyCode::Char('c'), KeyModifiers::CONTROL), false),
+            [3]
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::Char('x'), KeyModifiers::ALT), false),
+            b"\x1bx"
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::Up, KeyModifiers::NONE), false),
+            b"\x1b[A"
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::Up, KeyModifiers::NONE), true),
+            b"\x1bOA"
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::Right, KeyModifiers::CONTROL), true),
+            b"\x1b[1;5C"
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::F(5), KeyModifiers::NONE), false),
+            b"\x1b[15~"
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::F(1), KeyModifiers::NONE), false),
+            b"\x1bOP"
+        );
+        assert_eq!(
+            to_bytes(k(KeyCode::Backspace, KeyModifiers::NONE), false),
+            [0x7f]
+        );
     }
 }

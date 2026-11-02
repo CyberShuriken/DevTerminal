@@ -15,7 +15,9 @@ use std::time::Duration;
 
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::{
-    event::{self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture},
+    event::{
+        self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -29,7 +31,10 @@ fn main() -> io::Result<()> {
         None => std::env::current_dir()?,
     };
     if !dir.is_dir() {
-        return Err(io::Error::other(format!("{} is not a directory", dir.display())));
+        return Err(io::Error::other(format!(
+            "{} is not a directory",
+            dir.display()
+        )));
     }
 
     let hook = std::panic::take_hook();
@@ -39,7 +44,12 @@ fn main() -> io::Result<()> {
     }));
 
     enable_raw_mode()?;
-    execute!(stdout(), EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
+    execute!(
+        stdout(),
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        EnableBracketedPaste
+    )?;
     let result = App::new(dir).and_then(|mut app| {
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
         run(&mut terminal, &mut app)

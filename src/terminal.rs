@@ -30,7 +30,12 @@ impl Terminal {
     pub fn spawn(cwd: &Path, rows: u16, cols: u16) -> io::Result<Self> {
         let (rows, cols) = (rows.max(2), cols.max(2));
         let pair = native_pty_system()
-            .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(other)?;
         let shell = std::env::var("SHELL")
             .ok()
@@ -105,11 +110,18 @@ impl Terminal {
     }
 
     pub fn application_cursor(&self) -> bool {
-        self.parser.lock().map(|p| p.screen().application_cursor()).unwrap_or(false)
+        self.parser
+            .lock()
+            .map(|p| p.screen().application_cursor())
+            .unwrap_or(false)
     }
 
     pub fn paste(&mut self, text: &str) {
-        let bracketed = self.parser.lock().map(|p| p.screen().bracketed_paste()).unwrap_or(false);
+        let bracketed = self
+            .parser
+            .lock()
+            .map(|p| p.screen().bracketed_paste())
+            .unwrap_or(false);
         if bracketed {
             let mut v = b"\x1b[200~".to_vec();
             v.extend_from_slice(text.as_bytes());
@@ -142,7 +154,12 @@ impl Terminal {
             return;
         }
         self.size = (rows, cols);
-        let _ = self.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
+        let _ = self.master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        });
         if let Ok(mut p) = self.parser.lock() {
             p.set_size(rows, cols);
         }
@@ -158,19 +175,35 @@ impl Terminal {
         let screen = p.screen();
         for row in 0..area.height {
             for col in 0..area.width {
-                let Some(cell) = screen.cell(row, col) else { continue };
+                let Some(cell) = screen.cell(row, col) else {
+                    continue;
+                };
                 if cell.is_wide_continuation() {
                     continue;
                 }
-                let mut style = Style::default().fg(color(cell.fgcolor())).bg(color(cell.bgcolor()));
+                let mut style = Style::default()
+                    .fg(color(cell.fgcolor()))
+                    .bg(color(cell.bgcolor()));
                 let mut m = Modifier::empty();
-                if cell.bold() { m |= Modifier::BOLD; }
-                if cell.italic() { m |= Modifier::ITALIC; }
-                if cell.underline() { m |= Modifier::UNDERLINED; }
-                if cell.inverse() { m |= Modifier::REVERSED; }
+                if cell.bold() {
+                    m |= Modifier::BOLD;
+                }
+                if cell.italic() {
+                    m |= Modifier::ITALIC;
+                }
+                if cell.underline() {
+                    m |= Modifier::UNDERLINED;
+                }
+                if cell.inverse() {
+                    m |= Modifier::REVERSED;
+                }
                 style = style.add_modifier(m);
                 let contents = cell.contents();
-                let sym = if contents.is_empty() { " " } else { contents.as_str() };
+                let sym = if contents.is_empty() {
+                    " "
+                } else {
+                    contents.as_str()
+                };
                 if let Some(c) = buf.cell_mut((area.x + col, area.y + row)) {
                     c.set_symbol(sym).set_style(style);
                 }
@@ -178,7 +211,12 @@ impl Terminal {
         }
         if self.exited {
             let msg = "[shell exited — press Enter to restart]";
-            buf.set_string(area.x, area.y + area.height - 1, msg, Style::default().fg(Color::Yellow));
+            buf.set_string(
+                area.x,
+                area.y + area.height - 1,
+                msg,
+                Style::default().fg(Color::Yellow),
+            );
             return None;
         }
         if screen.hide_cursor() || screen.scrollback() > 0 {

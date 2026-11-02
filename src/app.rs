@@ -99,7 +99,9 @@ impl App {
         // The tree follows the active terminal tab; editor tabs leave it alone.
         if self.last_poll.elapsed() >= CWD_POLL {
             self.last_poll = Instant::now();
-            let Tab::Term(term) = &self.tabs[self.active] else { return changed };
+            let Tab::Term(term) = &self.tabs[self.active] else {
+                return changed;
+            };
             let cwd = term.cwd();
             if cwd.is_some() && cwd != self.shell_cwd {
                 self.shell_cwd = cwd.clone();
@@ -135,13 +137,20 @@ impl App {
                     self.quit = true;
                 } else {
                     self.quit_armed = true;
-                    self.status = "Unsaved changes! Press Ctrl+Q again to quit without saving.".into();
+                    self.status =
+                        "Unsaved changes! Press Ctrl+Q again to quit without saving.".into();
                 }
             }
             KeyCode::Char('e') if alt => {
-                self.focus = if self.focus == Focus::Left { Focus::Tree } else { Focus::Left };
+                self.focus = if self.focus == Focus::Left {
+                    Focus::Tree
+                } else {
+                    Focus::Left
+                };
             }
-            KeyCode::Left if alt => self.switch((self.active + self.tabs.len() - 1) % self.tabs.len()),
+            KeyCode::Left if alt => {
+                self.switch((self.active + self.tabs.len() - 1) % self.tabs.len())
+            }
             KeyCode::Right if alt => self.switch((self.active + 1) % self.tabs.len()),
             KeyCode::Char(c @ '1'..='9') if alt => self.switch(c as usize - '1' as usize),
             KeyCode::Char('w') if alt => self.close(self.active, close_armed),
@@ -200,7 +209,10 @@ impl App {
         if let Some(Tab::Editor(e)) = self.tabs.get(idx) {
             if e.dirty && !armed {
                 self.close_armed = true;
-                self.status = format!("{} has unsaved changes! Press Alt+W again to discard.", e.file_name());
+                self.status = format!(
+                    "{} has unsaved changes! Press Alt+W again to discard.",
+                    e.file_name()
+                );
                 return;
             }
         }
@@ -212,7 +224,9 @@ impl App {
     }
 
     fn open_selected(&mut self) {
-        let Some(entry) = self.tree.selected() else { return };
+        let Some(entry) = self.tree.selected() else {
+            return;
+        };
         let (path, is_dir) = (entry.path.clone(), entry.is_dir);
         if is_dir {
             if !self.tree.set_dir(path.clone()) {
@@ -224,7 +238,11 @@ impl App {
     }
 
     fn open_file(&mut self, path: PathBuf) {
-        if let Some(i) = self.tabs.iter().position(|t| matches!(t, Tab::Editor(e) if e.path == path)) {
+        if let Some(i) = self
+            .tabs
+            .iter()
+            .position(|t| matches!(t, Tab::Editor(e) if e.path == path))
+        {
             self.switch(i);
             return;
         }
@@ -239,7 +257,10 @@ impl App {
     }
 
     fn spawn_shell(&mut self) -> Option<Terminal> {
-        let (r, c) = (self.rects.content.height.max(2), self.rects.content.width.max(2));
+        let (r, c) = (
+            self.rects.content.height.max(2),
+            self.rects.content.width.max(2),
+        );
         Terminal::spawn(&self.tree.cwd, r, c)
             .map_err(|e| self.status = format!("cannot start shell: {e}"))
             .ok()
@@ -283,7 +304,11 @@ impl App {
         }
 
         // Left click.
-        if let Some(&(idx, _, close)) = r.tabs.iter().find(|(_, t, c)| contains(*t, x, y) || c.is_some_and(|c| contains(c, x, y))) {
+        if let Some(&(idx, _, close)) = r
+            .tabs
+            .iter()
+            .find(|(_, t, c)| contains(*t, x, y) || c.is_some_and(|c| contains(c, x, y)))
+        {
             if close.is_some_and(|c| contains(c, x, y)) {
                 let armed = self.close_armed && self.active == idx;
                 self.close_armed = false;

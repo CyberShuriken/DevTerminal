@@ -4,7 +4,9 @@ use std::path::Path;
 use std::sync::OnceLock;
 
 use ratatui::style::{Color, Modifier, Style};
-use syntect::highlighting::{FontStyle, HighlightIterator, HighlightState, Highlighter, Theme, ThemeSet};
+use syntect::highlighting::{
+    FontStyle, HighlightIterator, HighlightState, Highlighter, Theme, ThemeSet,
+};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
 
 struct Sets {
@@ -42,7 +44,11 @@ impl Highlight {
             .or_else(|| ss.find_syntax_by_extension(name))
             .or_else(|| ss.find_syntax_by_first_line(first_line))
             .unwrap_or_else(|| ss.find_syntax_plain_text());
-        Self { syntax, states: Vec::new(), lines: Vec::new() }
+        Self {
+            syntax,
+            states: Vec::new(),
+            lines: Vec::new(),
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -60,7 +66,10 @@ impl Highlight {
         let s = sets();
         let hl = Highlighter::new(&s.theme);
         if self.states.is_empty() {
-            self.states.push((ParseState::new(self.syntax), HighlightState::new(&hl, ScopeStack::new())));
+            self.states.push((
+                ParseState::new(self.syntax),
+                HighlightState::new(&hl, ScopeStack::new()),
+            ));
         }
         while self.lines.len() < upto.min(text.len()) {
             let i = self.lines.len();
@@ -86,9 +95,15 @@ impl Highlight {
 fn convert(st: syntect::highlighting::Style) -> Style {
     let f = st.foreground;
     let mut s = Style::default().fg(Color::Rgb(f.r, f.g, f.b));
-    if st.font_style.contains(FontStyle::BOLD) { s = s.add_modifier(Modifier::BOLD); }
-    if st.font_style.contains(FontStyle::ITALIC) { s = s.add_modifier(Modifier::ITALIC); }
-    if st.font_style.contains(FontStyle::UNDERLINE) { s = s.add_modifier(Modifier::UNDERLINED); }
+    if st.font_style.contains(FontStyle::BOLD) {
+        s = s.add_modifier(Modifier::BOLD);
+    }
+    if st.font_style.contains(FontStyle::ITALIC) {
+        s = s.add_modifier(Modifier::ITALIC);
+    }
+    if st.font_style.contains(FontStyle::UNDERLINE) {
+        s = s.add_modifier(Modifier::UNDERLINED);
+    }
     s
 }
 
@@ -108,6 +123,9 @@ mod tests {
         assert_eq!(joined, "fn main() {}");
         h.invalidate(1);
         assert_eq!((h.lines.len(), h.states.len()), (1, 2));
-        assert_eq!(Highlight::new(Path::new("x"), "#!/bin/bash").name(), "Bourne Again Shell (bash)");
+        assert_eq!(
+            Highlight::new(Path::new("x"), "#!/bin/bash").name(),
+            "Bourne Again Shell (bash)"
+        );
     }
 }
