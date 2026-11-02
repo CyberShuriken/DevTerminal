@@ -1,0 +1,18 @@
+[package]
+name = "devterm"
+version = "0.1.0"
+edition = "2021"
+description = "A two-pane terminal UI: shell on the left, file browser on the right."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/YOUR_USERNAME/devterm"
+keywords = ["tui", "terminal", "file-manager", "ratatui"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+# ratatui pulls in crossterm (re-exported as ratatui::crossterm) with default features.
+ratatui = "0.29"
+
+[profile.release]
+strip = true
+lto = true

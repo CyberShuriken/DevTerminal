@@ -1,0 +1,4 @@
+/target
+**/*.rs.bk
+
+# devterm is a binary crate, so Cargo.lock IS committed (do not ignore it).
