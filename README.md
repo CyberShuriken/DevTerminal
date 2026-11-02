@@ -28,8 +28,8 @@ single fast, native Rust binary with no runtime.
 | --- | --- |
 | 🖥️ **Real terminals** | Your `$SHELL` in a PTY: `vim`, `htop`, `git`, `ssh` all work. 5000 lines of scrollback. `Alt+T` opens more shell tabs. |
 | 📝 **Editor tabs** | Open any file from the tree. Syntax highlighting for 150+ languages, line numbers, auto-indent, smart Home, `Ctrl+S` to save, `●` for unsaved changes. |
-| 🌲 **Live file tree** | `cd` in a shell and the tree follows. Folders first, case-insensitive sorting, unreadable folders skipped. |
-| 🖱️ **Mouse support** | Click files, tabs and `×`; click to place the editor cursor; wheel-scroll the tree, editor and terminal scrollback. |
+| 🌲 **Live file tree** | `cd` in a shell and the tree follows. New and deleted files show up on their own. Folders expand in place. Folders first, case-insensitive sorting, unreadable folders skipped. |
+| 🖱️ **Mouse support** | Click files, tabs and `×`; click a folder to expand it, double-click to enter it; click to place the editor cursor; wheel-scroll the tree, editor and terminal scrollback. |
 | 🛡️ **Safe by default** | Keeps your line endings (LF/CRLF) and trailing newline; refuses binary, non-UTF-8 and >8 MB files; warns before discarding unsaved work. |
 | ⚡ **Light** | Redraws only when something changes; highlighting is incremental and limited to what's on screen. |
 
@@ -107,7 +107,8 @@ Global shortcuts use `Alt` so they never steal keys your shell needs.
 | Key | Action |
 | --- | --- |
 | `j` / `k`, `↓` / `↑` | Move |
-| `Enter`, `l`, `→` | Open folder / open file in a tab |
+| `l`, `→`, `Space` | Expand / collapse folder in place, or open file |
+| `Enter` | Enter folder / open file in a tab |
 | `h`, `←`, `Backspace` | Go up a folder |
 
 **Terminal** — every other key goes to the shell; typing snaps scrollback back
@@ -160,7 +161,8 @@ src/
 
 - [ ] Forward mouse events to full-screen terminal apps
 - [ ] Undo/redo, search, selection and clipboard in the editor
-- [ ] Expandable folders; create, rename and delete files from the tree
+- [x] Expandable folders
+- [ ] Create, rename and delete files from the tree
 - [ ] Resizable split and a config file
 - [ ] macOS support
 

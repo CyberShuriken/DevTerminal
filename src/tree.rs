@@ -1,24 +1,35 @@
-//! The file-tree pane: a flat listing of one directory.
+//! The file-tree pane: one directory, with folders expandable in place.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use ratatui::widgets::ListState;
 
+#[derive(PartialEq, Eq)]
 pub struct Entry {
     pub name: String,
     pub path: PathBuf,
     pub is_dir: bool,
+    /// Nesting level below the tree's root folder (0 = top level).
+    pub depth: usize,
 }
 
 pub struct Tree {
     pub cwd: PathBuf,
     pub entries: Vec<Entry>,
     pub state: ListState,
+    /// Folders currently expanded in place (absolute paths).
+    pub expanded: HashSet<PathBuf>,
 }
 
-/// ".." (when there is a parent), then folders, then files; case-insensitive.
-/// Errors on unreadable directories so callers can keep the old listing.
-fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
+/// Folders, then files, case-insensitive; expanded folders list their
+/// children right below them. Errors only if `dir` itself is unreadable.
+fn read_into(
+    dir: &Path,
+    depth: usize,
+    expanded: &HashSet<PathBuf>,
+    out: &mut Vec<Entry>,
+) -> std::io::Result<()> {
     let mut v: Vec<Entry> = std::fs::read_dir(dir)?
         .filter_map(Result::ok)
         .map(|e| {
@@ -31,36 +42,53 @@ fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
                 name: e.file_name().to_string_lossy().into(),
                 path,
                 is_dir,
+                depth,
             }
         })
         .collect();
     v.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
-    if let Some(parent) = dir.parent() {
-        v.insert(
-            0,
-            Entry {
-                name: "..".into(),
-                path: parent.to_path_buf(),
-                is_dir: true,
-            },
-        );
+    for e in v {
+        let open = e.is_dir && expanded.contains(&e.path);
+        let path = e.path.clone();
+        out.push(e);
+        if open {
+            // An unreadable subfolder just shows no children.
+            let _ = read_into(&path, depth + 1, expanded, out);
+        }
     }
+    Ok(())
+}
+
+/// ".." (when there is a parent), then the listing of `dir`.
+fn read(dir: &Path, expanded: &HashSet<PathBuf>) -> std::io::Result<Vec<Entry>> {
+    let mut v = Vec::new();
+    if let Some(parent) = dir.parent() {
+        v.push(Entry {
+            name: "..".into(),
+            path: parent.to_path_buf(),
+            is_dir: true,
+            depth: 0,
+        });
+    }
+    read_into(dir, 0, expanded, &mut v)?;
     Ok(v)
 }
 
 impl Tree {
     pub fn new(dir: PathBuf) -> std::io::Result<Self> {
-        let entries = read(&dir)?;
+        let expanded = HashSet::new();
+        let entries = read(&dir, &expanded)?;
         Ok(Self {
             cwd: dir,
             entries,
             state: ListState::default().with_selected(Some(0)),
+            expanded,
         })
     }
 
     /// Show `dir`. Returns false (and changes nothing) if it can't be read.
     pub fn set_dir(&mut self, dir: PathBuf) -> bool {
-        let Ok(entries) = read(&dir) else {
+        let Ok(entries) = read(&dir, &self.expanded) else {
             return false;
         };
         // Coming up out of a child folder: keep that folder selected.
@@ -70,9 +98,10 @@ impl Tree {
             .ok()
             .and_then(|rel| rel.components().next())
             .and_then(|c| {
+                let child = dir.join(c);
                 entries
                     .iter()
-                    .position(|e| e.name == c.as_os_str().to_string_lossy() && e.name != "..")
+                    .position(|e| e.path == child && e.name != "..")
             })
             .unwrap_or(0);
         self.entries = entries;
@@ -81,13 +110,39 @@ impl Tree {
         true
     }
 
-    pub fn refresh(&mut self) {
-        let sel = self.state.selected();
-        if let Ok(entries) = read(&self.cwd) {
-            self.entries = entries;
-            self.state
-                .select(sel.map(|s| s.min(self.entries.len().saturating_sub(1))));
+    /// Re-read from disk, keeping the selected path selected.
+    /// Returns true if the listing changed.
+    pub fn refresh(&mut self) -> bool {
+        let Ok(entries) = read(&self.cwd, &self.expanded) else {
+            return false;
+        };
+        if entries == self.entries {
+            return false;
         }
+        let sel = self.selected().map(|e| (e.path.clone(), e.name == ".."));
+        let idx = sel
+            .and_then(|(p, up)| {
+                entries
+                    .iter()
+                    .position(|e| e.path == p && (e.name == "..") == up)
+            })
+            .or(self.state.selected())
+            .map(|s| s.min(entries.len().saturating_sub(1)));
+        self.entries = entries;
+        self.state.select(idx);
+        true
+    }
+
+    /// Expand or collapse the folder at `i` in place.
+    pub fn toggle(&mut self, i: usize) {
+        let Some(e) = self.entries.get(i).filter(|e| e.is_dir && e.name != "..") else {
+            return;
+        };
+        let p = e.path.clone();
+        if !self.expanded.remove(&p) {
+            self.expanded.insert(p);
+        }
+        self.refresh();
     }
 
     pub fn go_up(&mut self) {
@@ -127,6 +182,29 @@ mod tests {
         t.go_up();
         assert_eq!(t.selected().unwrap().name, "Beta");
         assert!(!t.set_dir(d.join("missing")));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn expand_and_refresh() {
+        let d = std::env::temp_dir().join(format!("devterm-tree-x-{}", std::process::id()));
+        std::fs::create_dir_all(d.join("sub")).unwrap();
+        std::fs::write(d.join("sub/inner.txt"), "").unwrap();
+        let mut t = Tree::new(d.clone()).unwrap();
+        t.toggle(1); // "sub"
+        let names: Vec<_> = t
+            .entries
+            .iter()
+            .map(|e| (e.name.as_str(), e.depth))
+            .collect();
+        assert_eq!(names, [("..", 0), ("sub", 0), ("inner.txt", 1)]);
+        // A file created behind our back shows up on refresh.
+        std::fs::write(d.join("new.txt"), "").unwrap();
+        assert!(t.refresh());
+        assert!(t.entries.iter().any(|e| e.name == "new.txt"));
+        assert!(!t.refresh());
+        t.toggle(1);
+        assert_eq!(t.entries.len(), 3); // "..", "sub", "new.txt"
         std::fs::remove_dir_all(&d).unwrap();
     }
 }

@@ -91,13 +91,19 @@ fn draw_tree(f: &mut Frame, app: &mut App, area: Rect) {
         .entries
         .iter()
         .map(|e| {
+            let indent = "  ".repeat(e.depth);
             if e.is_dir {
                 let s = Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD);
-                ListItem::new(Line::styled(format!("▸ {}", e.name), s))
+                let icon = if app.tree.expanded.contains(&e.path) && e.name != ".." {
+                    "▾"
+                } else {
+                    "▸"
+                };
+                ListItem::new(Line::styled(format!("{indent}{icon} {}", e.name), s))
             } else {
-                ListItem::new(format!("  {}", e.name))
+                ListItem::new(format!("{indent}  {}", e.name))
             }
         })
         .collect();
@@ -117,7 +123,9 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         )
     } else {
         let hint = match (app.focus, &app.tabs[app.active]) {
-            (Focus::Tree, _) => "j/k move · Enter open · h up · Alt+E back to editor",
+            (Focus::Tree, _) => {
+                "j/k move · →/Space expand · Enter open · h up · click expand, double-click enter"
+            }
             (_, Tab::Term(_)) => {
                 "Alt+T new terminal · Alt+W close · Alt+E tree · Alt+←/→ tabs · Ctrl+Q quit"
             }

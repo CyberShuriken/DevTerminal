@@ -9,6 +9,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Desktop integration: `packaging/install.sh` installs a `devterm` app menu
   entry, icon and `devterm-launch` launcher, so devterm can be pinned to the
   dock like any terminal app.
+- File tree folders expand in place (click, `→`, `l` or `Space`);
+  double-click or `Enter` enters a folder.
+
+### Fixed
+- The file tree now picks up files created or deleted outside devterm
+  (it used to refresh only after changing folder).
+- Scrolling the terminal more than one screen back no longer panics in
+  debug builds (vt100 0.15 overflow).
 
 ## [0.3.0] - 2026-11-02
 

@@ -14,9 +14,9 @@ exclude = ["/.github", "/docs"]
 
 [dependencies]
 # ratatui pulls in crossterm (re-exported as ratatui::crossterm) with default features.
-ratatui = "0.29"
+ratatui = "0.30"
 portable-pty = "0.8"
-vt100 = "0.15"
+vt100 = "0.16"
 # default-fancy = pure-Rust regex (fancy-regex), no onig C dependency.
 syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 unicode-width = "0.2"
@@ -24,3 +24,4 @@ unicode-width = "0.2"
 [profile.release]
 strip = true
 lto = true
+

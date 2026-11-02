@@ -136,14 +136,14 @@ impl Terminal {
     pub fn scroll(&mut self, delta: isize) {
         if let Ok(mut p) = self.parser.lock() {
             let cur = p.screen().scrollback() as isize;
-            p.set_scrollback((cur + delta).max(0) as usize);
+            p.screen_mut().set_scrollback((cur + delta).max(0) as usize);
         }
     }
 
     pub fn scroll_to_bottom(&mut self) {
         if let Ok(mut p) = self.parser.lock() {
             if p.screen().scrollback() != 0 {
-                p.set_scrollback(0);
+                p.screen_mut().set_scrollback(0);
             }
         }
     }
@@ -161,7 +161,7 @@ impl Terminal {
             pixel_height: 0,
         });
         if let Ok(mut p) = self.parser.lock() {
-            p.set_size(rows, cols);
+            p.screen_mut().set_size(rows, cols);
         }
     }
 
@@ -199,11 +199,7 @@ impl Terminal {
                 }
                 style = style.add_modifier(m);
                 let contents = cell.contents();
-                let sym = if contents.is_empty() {
-                    " "
-                } else {
-                    contents.as_str()
-                };
+                let sym = if contents.is_empty() { " " } else { contents };
                 if let Some(c) = buf.cell_mut((area.x + col, area.y + row)) {
                     c.set_symbol(sym).set_style(style);
                 }

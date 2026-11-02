@@ -15,6 +15,7 @@ use crate::terminal::Terminal;
 use crate::tree::Tree;
 
 const CWD_POLL: Duration = Duration::from_millis(400);
+const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Focus {
@@ -49,6 +50,8 @@ pub struct App {
     close_armed: bool,
     shell_cwd: Option<PathBuf>,
     last_poll: Instant,
+    /// When and on which tree row the last left click landed.
+    last_click: Option<(Instant, usize)>,
 }
 
 fn contains(r: Rect, x: u16, y: u16) -> bool {
@@ -71,6 +74,7 @@ impl App {
             close_armed: false,
             shell_cwd: Some(dir),
             last_poll: Instant::now(),
+            last_click: None,
         })
     }
 
@@ -99,6 +103,8 @@ impl App {
         // The tree follows the active terminal tab; editor tabs leave it alone.
         if self.last_poll.elapsed() >= CWD_POLL {
             self.last_poll = Instant::now();
+            // Pick up files created/removed by the shell or other programs.
+            changed |= self.tree.refresh();
             let Tab::Term(term) = &self.tabs[self.active] else {
                 return changed;
             };
@@ -181,7 +187,8 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => self.tree.move_by(-1),
             KeyCode::PageDown => self.tree.move_by(10),
             KeyCode::PageUp => self.tree.move_by(-10),
-            KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right => self.open_selected(),
+            KeyCode::Enter => self.open_selected(),
+            KeyCode::Char('l') | KeyCode::Right | KeyCode::Char(' ') => self.expand_selected(),
             KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace => self.tree.go_up(),
             _ => {}
         }
@@ -234,6 +241,18 @@ impl App {
             }
         } else {
             self.open_file(path);
+        }
+    }
+
+    /// Expand/collapse the selected folder; ".." goes up, files open.
+    fn expand_selected(&mut self) {
+        match self.tree.selected() {
+            Some(e) if e.is_dir && e.name != ".." => {
+                if let Some(i) = self.tree.state.selected() {
+                    self.tree.toggle(i);
+                }
+            }
+            _ => self.open_selected(),
         }
     }
 
@@ -322,8 +341,17 @@ impl App {
             // +1 for the border row.
             let i = self.tree.state.offset() + (y - r.tree.y).saturating_sub(1) as usize;
             if y > r.tree.y && i < self.tree.entries.len() {
+                let double = self
+                    .last_click
+                    .is_some_and(|(t, j)| j == i && t.elapsed() < DOUBLE_CLICK);
+                self.last_click = (!double).then(|| (Instant::now(), i));
                 self.tree.state.select(Some(i));
-                self.open_selected();
+                // Folders: one click expands in place, a double click enters.
+                if double {
+                    self.open_selected();
+                } else {
+                    self.expand_selected();
+                }
             }
         } else if contains(r.content, x, y) {
             self.focus = Focus::Left;
